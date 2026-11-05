@@ -69,9 +69,9 @@ h1 span{color:#ffd166}
 #board{grid-area:board;display:flex;flex-direction:column;justify-content:center;align-items:stretch;padding:0.5rem;direction:ltr;overflow:hidden;position:relative}
 .crow{display:flex;align-items:center;gap:0.1875rem;margin:0.25rem 0}
 .hint{text-align:center;opacity:.6;font-weight:800;direction:rtl}
-#bone{position:absolute;bottom:0.5rem;right:0.625rem;font-size:0.75rem;font-weight:800;opacity:.85;direction:rtl}
+#bone{position:absolute;top:0.25rem;right:0.625rem;z-index:2;background:rgba(0,0,0,.35);padding:0 .5rem;border-radius:999px;font-size:0.75rem;font-weight:800;opacity:.85;direction:rtl}
 .tile{--u:1.875rem;display:flex;background:linear-gradient(160deg,#fff,#e7e7e7);border-radius:calc(var(--u)*.16);
- box-shadow:0 calc(var(--u)*.08) 0 #a9a9a9,0 0.1875rem 0.5rem rgba(0,0,0,.35);flex:none;position:relative}
+ box-shadow:inset 0 0 0 1px #bdbdbd,0 2px 4px rgba(0,0,0,.35);flex:none;position:relative}
 .tile.h{flex-direction:row}.tile.v{flex-direction:column}
 .half{width:var(--u);height:var(--u);display:grid;grid-template:repeat(3,1fr)/repeat(3,1fr);padding:calc(var(--u)*.12)}
 .tile.h .half:first-child{border-right:1px solid #888}
@@ -104,6 +104,19 @@ h1 span{color:#ffd166}
 .toast{position:fixed;top:30%;left:50%;transform:translate(-50%,-50%);background:#ef476f;color:#fff;font:1.75rem 'Lalezar';padding:0.5rem 1.625rem;border-radius:1rem;z-index:15;pointer-events:none;opacity:0;transition:opacity .2s;white-space:nowrap}
 .toast.on{opacity:1}
 canvas#fx{position:fixed;inset:0;pointer-events:none;z-index:30}
+
+/* pseudo-landscape when 3-4 players on a portrait phone */
+body.rot #game,body.rot .ov{inset:auto!important;top:0!important;left:var(--vw)!important;width:var(--vh)!important;height:var(--vw)!important;transform-origin:0 0;transform:rotate(90deg)}
+#game{grid-template-rows:auto auto minmax(0,1fr) auto!important}
+#sLeft,#sRight{min-height:0;overflow:hidden}
+body.short #sLeft .backs,body.short #sRight .backs{display:none}
+body.short #sTop .back{width:.6rem;height:1rem}
+body.short #sTop{padding:2px}
+body.short .avatar{width:2.4rem;height:2.4rem;font-size:1.4rem}
+body.short #bot{flex-direction:row;flex-wrap:wrap;padding:4px 6px 6px;gap:4px 10px}
+body.short #meRow{width:auto;flex-direction:column;gap:2px}
+body.short #hand{padding:4px 2px}
+body.rot .toast{transform:translate(-50%,-50%) rotate(90deg)}
 </style>
 </head>
 <body class="felt">
@@ -203,7 +216,20 @@ const PREFIX='dominoderb-v1-';
 const TN=['🟦 الفرقة الزرقا','🟥 الفرقة الحمرا'];
 const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
 let timers=[];const later=(f,ms)=>timers.push(setTimeout(f,ms));const clearT=()=>{timers.forEach(clearTimeout);timers=[]};
-function show(id){['home','lobby'].forEach(s=>$('#'+s).classList.toggle('on',s===id));$('#game').classList.toggle('on',id==='game')}
+document.addEventListener('pointerdown',()=>{if(role==='client'&&V&&V.n>=3&&!tryLand.done){tryLand.done=1;tryLand()}});
+function show(id){['home','lobby'].forEach(s=>$('#'+s).classList.toggle('on',s===id));$('#game').classList.toggle('on',id==='game');orient()}
+
+
+/* ---------- orientation ---------- */
+const EW=()=>document.body.classList.contains('rot')?innerHeight:innerWidth;
+const EH=()=>document.body.classList.contains('rot')?innerWidth:innerHeight;
+function orient(){const st=document.documentElement.style;st.setProperty('--vw',innerWidth+'px');st.setProperty('--vh',innerHeight+'px');
+  const g=$('#game'),src=(V||G);const want=!!(g&&g.classList.contains('on')&&src&&src.n>=3&&innerHeight>innerWidth);
+  document.body.classList.toggle('rot',want);document.body.classList.toggle('short',EH()<520)}
+function tryLand(){try{if(document.fullscreenElement||!document.documentElement.requestFullscreen)return;
+  document.documentElement.requestFullscreen({navigationUI:'hide'}).then(()=>{try{screen.orientation.lock('landscape').catch(()=>{})}catch(e){}}).catch(()=>{})}catch(e){}}
+function exitLand(){try{screen.orientation.unlock()}catch(e){}try{document.fullscreenElement&&document.exitFullscreen().catch(()=>{})}catch(e){}}
+addEventListener('resize',()=>{orient();render()});
 
 /* ---------- sound ---------- */
 let AC=null;
@@ -230,7 +256,7 @@ function newCode(){const A='ABCDEFGHJKMNPQRSTUVWXYZ23456789';let s='';for(let i=
 function busy(t){$('#homeErr').innerHTML=t?`<span class="spin">⏳</span> ${t}`:''}
 function fail(title,text){clearT();$('#iTitle').textContent=title;$('#iText').textContent=text;$('#infoOv').classList.add('on')}
 $('#iBtn').onclick=()=>{$('#infoOv').classList.remove('on');leave()};
-function leave(){clearT();try{peer&&peer.destroy()}catch(e){}peer=null;role=null;hostConn=null;G=null;V=null;
+function leave(){clearT();exitLand();try{peer&&peer.destroy()}catch(e){}peer=null;role=null;hostConn=null;G=null;V=null;
   document.querySelectorAll('.ov').forEach(o=>o.classList.remove('on'));busy('');show('home')}
 $('#leaveBtn').onclick=leave;$('#mLeave').onclick=leave;
 $('#menuBtn').onclick=()=>{$('#menuCode').textContent='كود الغرفة: '+code;$('#menuOv').classList.add('on')};
@@ -310,7 +336,7 @@ function hostOpt(id,key){document.querySelectorAll(id+' .opt').forEach(b=>b.oncl
   if(role!=='host')return;const v=+b.dataset.v;if(key==='n'&&v<LB.seats.length){toast('كاين '+LB.seats.length+' لاعبين');return}
   LB[key]=v;tone(600,.05);renderLobby()})}
 hostOpt('#nOpts','n');hostOpt('#mOpts','teams');hostOpt('#tOpts','target');
-$('#startBtn').onclick=()=>{if(role!=='host')return;unlock();LB.started=true;startGame()};
+$('#startBtn').onclick=()=>{if(role!=='host')return;unlock();if(LB.n>=3)tryLand();LB.started=true;startGame()};
 
 /* ===== CLIENT ===== */
 function startClient(name,c){
@@ -491,6 +517,26 @@ const tagOf=i=>V&&V.teams?(i%2?'🟥':'🟦'):'';
 const scoreOf=i=>V.teams?V.tscore[i%2]:V.players[i].score;
 
 /* ---------- rendering ---------- */
+/* snake layout: tiles touch, turn at the edges, shrink to fit */
+function layoutChain(ch,u,W){const it=[];let dir=1,cx=0,cy=u,after=false,first=true;
+  for(let i=0;i<ch.length;i++){const c=ch[i],dbl=c.a===c.b;const vert=dbl&&!after,w=vert?u:2*u;
+    if(!first&&!after&&(dir>0?cx+w>W-u:cx-w<u)){const x=dir>0?cx:cx-u;it.push({i,x,y:cy-u/2,o:'v',v:[c.a,c.b]});
+      cy+=2*u;cx=dir>0?x+u:x;dir=-dir;after=true;continue}
+    first=false;const x=dir>0?cx:cx-w,y=vert?cy-u:cy-u/2;
+    it.push({i,x,y,o:vert?'v':'h',v:vert?[c.a,c.b]:(dir>0?[c.a,c.b]:[c.b,c.a])});cx+=dir*w;after=false}
+  let a=1e9,b=-1e9,c2=1e9,d=-1e9;it.forEach(t=>{const tw=t.o==='v'?u:2*u,th=t.o==='v'?2*u:u;
+    a=Math.min(a,t.x);b=Math.max(b,t.x+tw);c2=Math.min(c2,t.y);d=Math.max(d,t.y+th)});
+  return{items:it,minX:a,maxX:b,minY:c2,maxY:d}}
+function drawChain(B,ch,last,anim,pick,onEnd){
+  const W=B.clientWidth-12,H=B.clientHeight-12;let u=Math.floor(Math.min(56*R,Math.min(W,H)/4.2)),L;
+  for(;u>=6;u--){L=layoutChain(ch,u,W);if(L.maxY-L.minY<=H&&L.maxX-L.minX<=W)break}
+  const wrap=document.createElement('div');
+  wrap.style.cssText=`position:absolute;left:${(B.clientWidth-(L.maxX-L.minX))/2-L.minX}px;top:${(B.clientHeight-(L.maxY-L.minY))/2-L.minY}px`;
+  L.items.forEach(t=>{const el=tileEl(t.v[0],t.v[1],t.o,u);el.style.position='absolute';el.style.left=t.x+'px';el.style.top=t.y+'px';
+    if(t.i===0||t.i===ch.length-1){el.classList.add('endt');if(pick){el.classList.add('pick');el.onclick=()=>onEnd(t.i===0?'L':'R')}}
+    if(t.i===last&&anim)el.classList.add('fresh');wrap.appendChild(el)});
+  B.appendChild(wrap)}
+
 const PAT={0:[],1:[4],2:[0,8],3:[0,4,8],4:[0,2,6,8],5:[0,2,4,6,8],6:{v:[0,2,3,5,6,8],h:[0,1,2,6,7,8]}};
 function half(v,o){const d=document.createElement('div');d.className='half';const pat=v===6?PAT[6][o]:PAT[v];
   for(let k=0;k<9;k++){const c=document.createElement('div');c.className='pip';if(pat.includes(k))c.appendChild(document.createElement('i'));d.appendChild(c)}return d}
@@ -498,7 +544,7 @@ function tileEl(a,b,o,u){const t=document.createElement('div');t.className='tile
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.h);toast.h=setTimeout(()=>t.classList.remove('on'),1300)}
 
 function render(anim){
-  if(!V)return;
+  if(!V)return;orient();
   $('#roundChip').textContent='الجولة '+V.round;$('#tgt').textContent=V.target;$('#msg').textContent=V.msg||'';
   renderSeats();renderBoard(anim);renderBottom();
 }
@@ -519,19 +565,7 @@ function renderBoard(anim){
   const B=$('#board');B.innerHTML='';const ch=V.chain;
   const bone=document.createElement('div');bone.id='bone';if(V.n<4)bone.textContent='🂠 الصاكة: '+V.bone;
   if(!ch.length){B.innerHTML=`<div class="hint">الطابلة خاوية — ${V.players[V.turn].name} يبدا 🁫</div>`;B.appendChild(bone);return}
-  const W=B.clientWidth-16,H=B.clientHeight-16;let u,rows;
-  for(u=Math.round(Math.min(46*R,Math.min(W,H)/7));u>=9;u--){rows=split(ch,u,W);if(rows.length*(2*u+8)<=H)break}
-  const pick=sel!==null&&ch.length>1;
-  rows.forEach((row,ri)=>{
-    const r=document.createElement('div');r.className='crow';
-    r.style.justifyContent=rows.length===1?'center':(ri%2?'flex-end':'flex-start');
-    (ri%2?[...row].reverse():row).forEach(idx=>{
-      const c=ch[idx],dbl=c.a===c.b;
-      const el=dbl?tileEl(c.a,c.b,'v',u):(ri%2?tileEl(c.b,c.a,'h',u):tileEl(c.a,c.b,'h',u));
-      if(idx===0||idx===ch.length-1){el.classList.add('endt');if(pick){el.classList.add('pick');el.onclick=()=>playSel(idx===0?'L':'R')}}
-      if(idx===V.last&&anim)el.classList.add('fresh');
-      r.appendChild(el)});
-    B.appendChild(r)});
+  drawChain(B,ch,V.last,anim,sel!==null&&ch.length>1,playSel);
   B.appendChild(bone);
 }
 function split(ch,u,W){const rows=[[]];let cur=0;
@@ -543,7 +577,7 @@ function renderBottom(){
     <div style="text-align:right"><div>${tagOf(V.me)} ${me.name}</div><div class="sc">⭐ ${scoreOf(V.me)}${V.teams?' · خصوم ⭐ '+V.tscore[1-V.me%2]:''}</div></div></div>
     <div style="font-size:0.8125rem;font-weight:800;opacity:.9">${myTurn?'👉 دورك!':'⏳ دور '+V.players[V.turn].name}</div>`;
   const H=$('#hand');H.innerHTML='';
-  const w=Math.max(16*R,Math.min(60*R,innerHeight*.11,Math.floor((innerWidth-24)/Math.max(V.hand.length,1)-7*R)));
+  const w=Math.max(16*R,Math.min(60*R,EH()*.11,Math.floor((EW()-(EH()<520?150:24))/Math.max(V.hand.length,1)-7*R)));
   V.hand.forEach((t,i)=>{
     const el=tileEl(t[0],t[1],'v',w);
     if(myTurn)el.classList.add(okIn(V.chain,t)?'ok':'dim');
